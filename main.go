@@ -1,17 +1,30 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"text/template"
-	"fmt"
+	"math/rand"
 )
 
 type Config struct {
-	Port    string   `yaml:"port"`
+	Port string `yaml:"port"`
+}
+
+type CompilationResult struct {
+	Output   string   `json:"output"`
+	Error    string   `json:"error"`
+	Warnings []string `json:"warnings"`
+}
+
+type Code struct {
+	Code  string `json:"code"`
+	Input string `json:"input"`
 }
 
 var (
@@ -37,6 +50,7 @@ func init() {
 }
 
 func main() {
+	rand.Seed(42)
 	http.HandleFunc("/", homePage)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
 	err := http.ListenAndServe(":"+port, nil)
@@ -46,16 +60,36 @@ func main() {
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Error reading request body",
-			http.StatusInternalServerError)
-	}
-	log.Println(string(body))
 
-	if lol := r.PostFormValue("lol"); lol != "" {
-		log.Println(lol)
-		fmt.Fprint(w, "Hello world!")
+	if r.Method == "POST" {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Error reading request body",
+				http.StatusInternalServerError)
+		}
+		log.Println(string(body))
+
+		code := Code{}
+		json.Unmarshal(body, &code)
+		log.Println(code.Code)
+
+		response1 := CompilationResult{}
+		response1.Output = "lol"
+		response1.Warnings = []string{"1: a", "2: b", "3: c"}
+		response2 := CompilationResult{}
+		response2.Error = "5: Fatality"
+
+		
+		i := rand.Intn(2)
+
+		if i%2 == 0 {
+			response, _ := json.Marshal(response1)
+			fmt.Fprintf(w, string(response))
+		} else {
+			response, _ := json.Marshal(response2)
+			fmt.Fprintf(w, string(response))
+		}
+
 	} else {
 		t, _ := template.ParseFiles("./templates/index.tpl")
 		t.Execute(w, struct{}{})
